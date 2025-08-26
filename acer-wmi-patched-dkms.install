@@ -1,0 +1,65 @@
+post_install() {
+    echo "==> Building and installing acer-wmi-patched module with DKMS..."
+    dkms add acer-wmi-patched/1
+    dkms build acer-wmi-patched/1
+    dkms install acer-wmi-patched/1
+
+    echo "==> Blacklisting original acer-wmi module to prevent conflicts..."
+    echo "blacklist acer-wmi" > /etc/modprobe.d/acer-wmi-patched.conf
+
+    echo "==> Unloading original acer-wmi module if loaded..."
+    if lsmod | grep -q "^acer_wmi"; then
+        modprobe -r acer-wmi 2>/dev/null || true
+    fi
+
+    echo "==> Loading patched acer-wmi-patched module..."
+    modprobe acer-wmi-patched
+
+    echo "==> acer-wmi-patched module successfully installed and loaded"
+    echo "==> Original acer-wmi module has been blacklisted to prevent conflicts"
+    echo "==> To restore original module, remove this package"
+}
+
+post_upgrade() {
+    echo "==> Removing old acer-wmi-patched module..."
+    dkms remove acer-wmi-patched/1 --all 2>/dev/null || true
+
+    echo "==> Building and installing updated acer-wmi-patched module..."
+    dkms add acer-wmi-patched/1
+    dkms build acer-wmi-patched/1
+    dkms install acer-wmi-patched/1
+
+    echo "==> Unloading existing modules..."
+    if lsmod | grep -q "^acer_wmi_patched"; then
+        modprobe -r acer-wmi-patched 2>/dev/null || true
+    fi
+    if lsmod | grep -q "^acer_wmi"; then
+        modprobe -r acer-wmi 2>/dev/null || true
+    fi
+
+    echo "==> Loading updated acer-wmi-patched module..."
+    modprobe acer-wmi-patched
+
+    echo "==> acer-wmi-patched module successfully updated and reloaded"
+}
+
+pre_remove() {
+    echo "==> Unloading acer-wmi-patched module..."
+    if lsmod | grep -q "^acer_wmi_patched"; then
+        modprobe -r acer-wmi-patched 2>/dev/null || true
+    fi
+
+    echo "==> Removing acer-wmi-patched from DKMS..."
+    dkms remove acer-wmi-patched/1 --all 2>/dev/null || true
+}
+
+post_remove() {
+    echo "==> Removing blacklist for original acer-wmi module..."
+    rm -f /etc/modprobe.d/acer-wmi-patched.conf
+
+    echo "==> Attempting to load original acer-wmi module..."
+    modprobe acer-wmi 2>/dev/null || true
+
+    echo "==> acer-wmi-patched removed, original acer-wmi module restored"
+    echo "==> You may need to reboot if the original module doesn't load properly"
+}

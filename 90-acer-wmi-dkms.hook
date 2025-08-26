@@ -1,0 +1,11 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = acer-wmi-patched-dkms
+
+[Action]
+Description = Reloading acer-wmi-patched kernel module...
+When = PostTransaction
+Exec = /usr/bin/bash -c 'modprobe -r acer-wmi 2>/dev/null || true; modprobe -r acer-wmi-patched 2>/dev/null || true; modprobe acer-wmi-patched'
+Depends = kmod

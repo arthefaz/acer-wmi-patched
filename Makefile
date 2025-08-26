@@ -1,5 +1,5 @@
-CFLAGS_acer-wmi.o := -DDEBUG
-obj-m += acer-wmi.o
+CFLAGS_acer-wmi-patched.o := -DDEBUG
+obj-m += acer-wmi-patched.o
 
 all:
 	make -C /lib/modules/`uname -r`/build M=`pwd` modules

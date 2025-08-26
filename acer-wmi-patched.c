@@ -1914,7 +1914,7 @@ enum led_brightness value)
 }
 
 static struct led_classdev mail_led = {
-	.name = "acer-wmi::mail",
+	.name = "acer-wmi-patched::mail",
 	.brightness_set = mail_led_set,
 };
 
@@ -1963,7 +1963,7 @@ static int acer_backlight_init(struct device *dev)
 	memset(&props, 0, sizeof(struct backlight_properties));
 	props.type = BACKLIGHT_PLATFORM;
 	props.max_brightness = max_brightness;
-	bd = backlight_device_register("acer-wmi", dev, NULL, &acer_bl_ops,
+	bd = backlight_device_register("acer-wmi-patched", dev, NULL, &acer_bl_ops,
 				       &props);
 	if (IS_ERR(bd)) {
 		pr_err("Could not register Acer backlight device\n");
@@ -2217,7 +2217,7 @@ static int acer_platform_profile_setup(struct platform_device *device)
 {
 	if (quirks->predator_v4) {
 		platform_profile_device = devm_platform_profile_register(
-			&device->dev, "acer-wmi", NULL, &acer_predator_v4_platform_profile_ops);
+			&device->dev, "acer-wmi-patched", NULL, &acer_predator_v4_platform_profile_ops);
 		if (IS_ERR(platform_profile_device))
 			return PTR_ERR(platform_profile_device);
 
@@ -2907,7 +2907,7 @@ static void acer_platform_shutdown(struct platform_device *device)
 
 static struct platform_driver acer_platform_driver = {
 	.driver = {
-		.name = "acer-wmi",
+		.name = "acer-wmi-patched",
 		.pm = &acer_pm,
 	},
 	.probe = acer_platform_probe,
@@ -2924,7 +2924,7 @@ static void remove_debugfs(void)
 
 static void __init create_debugfs(void)
 {
-	interface->debug.root = debugfs_create_dir("acer-wmi", NULL);
+	interface->debug.root = debugfs_create_dir("acer-wmi-patched", NULL);
 
 	debugfs_create_u32("devices", S_IRUGO, interface->debug.root,
 			   &interface->debug.wmid_devices);
@@ -3296,7 +3296,7 @@ static int __init acer_wmi_init(void)
 		goto error_platform_register;
 	}
 
-	acer_platform_device = platform_device_alloc("acer-wmi", PLATFORM_DEVID_NONE);
+	acer_platform_device = platform_device_alloc("acer-wmi-patched", PLATFORM_DEVID_NONE);
 	if (!acer_platform_device) {
 		err = -ENOMEM;
 		goto error_device_alloc;
