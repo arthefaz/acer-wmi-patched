@@ -1,0 +1,9 @@
+pkg
+src
+*.pkg.tar*
+*.o
+*.ko
+*.mod*
+*.cmd*
+*.symvers
+*.order
