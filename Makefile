@@ -1,8 +1,16 @@
 CFLAGS_acer-wmi-patched.o := -DDEBUG
 obj-m += acer-wmi-patched.o
 
-all:
-	make -C /lib/modules/`uname -r`/build M=`pwd` modules
+KVER ?= $(shell uname -r)
+KDIR ?= /lib/modules/$(KVER)/build
+VERSION ?= $(shell cat VERSION)
+
+default:
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
 
 clean:
-	make -C /lib/modules/`uname -r`/build M=`pwd` clean
+	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
+
+install:
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules_install
+
