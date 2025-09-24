@@ -695,7 +695,7 @@ static const struct dmi_system_id acer_quirks[] __initconst = {
 	},
 	{
 		.callback = dmi_matched,
-		.ident = "Acer Predator PHN16-72",
+		.ident = "Acer Predator Helios Neo 16",
 		.matches = {
 			DMI_MATCH(DMI_SYS_VENDOR, "Acer"),
 			DMI_MATCH(DMI_PRODUCT_NAME, "Predator PHN16-72"),
@@ -1674,8 +1674,9 @@ static int WMID_gaming_set_fan_behavior(u16 fan_bitmap, u8 mode_bitmap)
 	if (ACPI_FAILURE(status))
 		return -EIO;
 
-	/* TODO: Proper error handling */
-	pr_notice("Fan behavior return status: %llu\n", result);
+	/* The return status must be zero for the operation to have succeeded */
+	if (FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_STATUS_MASK, result))
+		return -EIO;
 
 	return 0;
 }
