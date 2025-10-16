@@ -77,16 +77,15 @@ MODULE_LICENSE("GPL");
 #define ACER_WMID_SET_GAMING_MISC_SETTING_METHODID 22
 #define ACER_WMID_GET_GAMING_MISC_SETTING_METHODID 23
 
-#define ACER_GAMING_FAN_BEHAVIOR_STATUS_MASK GENMASK_ULL(7, 0)
-#define ACER_GAMING_FAN_BEHAVIOR_ID_MASK GENMASK_ULL(15, 0)
-#define ACER_GAMING_FAN_BEHAVIOR_SET_MODE_MASK GENMASK_ULL(23, 16)
-#define ACER_GAMING_FAN_BEHAVIOR_GET_MODE_MASK GENMASK_ULL(23, 8)
-
 #define ACER_GAMING_FAN_BEHAVIOR_CPU BIT(0)
 #define ACER_GAMING_FAN_BEHAVIOR_GPU BIT(3)
 
-#define ACER_GAMING_FAN_BEHAVIOR_CPU_MODE_MASK GENMASK(1, 0)
-#define ACER_GAMING_FAN_BEHAVIOR_GPU_MODE_MASK GENMASK(7, 6)
+#define ACER_GAMING_FAN_BEHAVIOR_STATUS_MASK GENMASK_ULL(7, 0)
+#define ACER_GAMING_FAN_BEHAVIOR_ID_MASK GENMASK_ULL(15, 0)
+#define ACER_GAMING_FAN_BEHAVIOR_SET_CPU_MODE_MASK GENMASK(17, 16)
+#define ACER_GAMING_FAN_BEHAVIOR_SET_GPU_MODE_MASK GENMASK(23, 22)
+#define ACER_GAMING_FAN_BEHAVIOR_GET_CPU_MODE_MASK GENMASK(9, 8)
+#define ACER_GAMING_FAN_BEHAVIOR_GET_GPU_MODE_MASK GENMASK(15, 14)
 
 #define ACER_GAMING_FAN_SPEED_STATUS_MASK GENMASK_ULL(7, 0)
 #define ACER_GAMING_FAN_SPEED_ID_MASK GENMASK_ULL(7, 0)
@@ -1660,14 +1659,19 @@ static int WMID_gaming_get_sys_info(u32 command, u64 *out)
 	return 0;
 }
 
-static int WMID_gaming_set_fan_behavior(u16 fan_bitmap, u8 mode_bitmap)
+static int WMID_gaming_set_fan_behavior(u16 fan_bitmap, enum acer_wmi_gaming_fan_mode mode)
 {
 	acpi_status status;
 	u64 input = 0;
 	u64 result;
 
 	input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_ID_MASK, fan_bitmap);
-	input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_SET_MODE_MASK, mode_bitmap);
+
+	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_CPU)
+		input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_SET_CPU_MODE_MASK, mode);
+
+	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_CPU)
+		input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_SET_GPU_MODE_MASK, mode);
 
 	status = WMI_gaming_execute_u64(ACER_WMID_SET_GAMING_FAN_BEHAVIOR_METHODID, input,
 					&result);
@@ -1681,11 +1685,12 @@ static int WMID_gaming_set_fan_behavior(u16 fan_bitmap, u8 mode_bitmap)
 	return 0;
 }
 
-static int WMID_gaming_get_fan_behavior(u16 fan_bitmap, u8 *mode_bitmap)
+static int WMID_gaming_get_fan_behavior(u16 fan_bitmap, enum acer_wmi_gaming_fan_mode *mode)
 {
 	acpi_status status;
 	u32 input = 0;
 	u64 result;
+	int value;
 
 	input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_ID_MASK, fan_bitmap);
 	status = WMI_gaming_execute_u32_u64(ACER_WMID_GET_GAMING_FAN_BEHAVIOR_METHODID, input,
@@ -1697,27 +1702,35 @@ static int WMID_gaming_get_fan_behavior(u16 fan_bitmap, u8 *mode_bitmap)
 	if (FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_STATUS_MASK, result))
 		return -EIO;
 
-	*mode_bitmap = FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_GET_MODE_MASK, result);
+	/* Theoretically multiple fans can be specified, but this is currently unused */
+	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_CPU) {
+		value = FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_GET_CPU_MODE_MASK, result);
+	} else {
+		if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_GPU)
+			value = FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_GET_GPU_MODE_MASK, result);
+		else
+			return -EINVAL;
+	}
+
+	if (value < ACER_WMID_FAN_MODE_AUTO || value > ACER_WMID_FAN_MODE_CUSTOM)
+		return -ENXIO;
+
+	*mode = value;
 
 	return 0;
 }
 
-static void WMID_gaming_set_fan_mode(u8 fan_mode)
+static void WMID_gaming_set_fan_mode(enum acer_wmi_gaming_fan_mode mode)
 {
-	u16 mode_bitmap = 0;
 	u16 fan_bitmap = 0;
 
-	if (quirks->cpu_fans > 0) {
+	if (quirks->cpu_fans > 0)
 		fan_bitmap |= ACER_GAMING_FAN_BEHAVIOR_CPU;
-		mode_bitmap |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_CPU_MODE_MASK, fan_mode);
-	}
 
-	if (quirks->gpu_fans > 0) {
+	if (quirks->gpu_fans > 0)
 		fan_bitmap |= ACER_GAMING_FAN_BEHAVIOR_GPU;
-		mode_bitmap |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_GPU_MODE_MASK, fan_mode);
-	}
 
-	WMID_gaming_set_fan_behavior(fan_bitmap, mode_bitmap);
+	WMID_gaming_set_fan_behavior(fan_bitmap, mode);
 }
 
 static int WMID_gaming_set_gaming_fan_speed(u8 fan, u8 speed)
@@ -2942,10 +2955,11 @@ static int acer_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			       u32 attr, int channel, long *val)
 {
 	u64 command = ACER_WMID_CMD_GET_PREDATOR_V4_SENSOR_READING;
-	u8 fan, speed, mode_bitmap;
+	enum acer_wmi_gaming_fan_mode mode;
 	u16 fan_bitmap;
-	int mode, ret;
+	u8 fan, speed;
 	u64 result;
+	int ret;
 
 	switch (type) {
 	case hwmon_temp:
@@ -2981,22 +2995,9 @@ static int acer_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 			return 0;
 		case hwmon_pwm_enable:
 			fan_bitmap = acer_wmi_fan_channel_to_fan_bitmap[channel];
-			ret = WMID_gaming_get_fan_behavior(fan_bitmap, &mode_bitmap);
+			ret = WMID_gaming_get_fan_behavior(fan_bitmap, &mode);
 			if (ret < 0)
 				return ret;
-
-			switch (channel) {
-			case 0:
-				mode = FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_CPU_MODE_MASK,
-						 mode_bitmap);
-				break;
-			case 1:
-				mode = FIELD_GET(ACER_GAMING_FAN_BEHAVIOR_GPU_MODE_MASK,
-						 mode_bitmap);
-				break;
-			default:
-				return -EINVAL;
-			}
 
 			switch (mode) {
 			case ACER_WMID_FAN_MODE_AUTO:
@@ -3022,9 +3023,9 @@ static int acer_wmi_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 static int acer_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type,
 				u32 attr, int channel, long val)
 {
-	u8 fan, speed, mode_bitmap;
+	enum acer_wmi_gaming_fan_mode mode;
 	u16 fan_bitmap;
-	int mode;
+	u8 fan, speed;
 
 	switch (type) {
 	case hwmon_pwm:
@@ -3052,20 +3053,7 @@ static int acer_wmi_hwmon_write(struct device *dev, enum hwmon_sensor_types type
 				return -EINVAL;
 			}
 
-			switch (channel) {
-			case 0:
-				mode_bitmap = FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_CPU_MODE_MASK,
-							 mode);
-				break;
-			case 1:
-				mode_bitmap = FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_GPU_MODE_MASK,
-							 mode);
-				break;
-			default:
-				return -EINVAL;
-			}
-
-			return WMID_gaming_set_fan_behavior(fan_bitmap, mode_bitmap);
+			return WMID_gaming_set_fan_behavior(fan_bitmap, mode);
 		default:
 			return -EOPNOTSUPP;
 		}
