@@ -1670,7 +1670,7 @@ static int WMID_gaming_set_fan_behavior(u16 fan_bitmap, enum acer_wmi_gaming_fan
 	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_CPU)
 		input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_SET_CPU_MODE_MASK, mode);
 
-	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_CPU)
+	if (fan_bitmap & ACER_GAMING_FAN_BEHAVIOR_GPU)
 		input |= FIELD_PREP(ACER_GAMING_FAN_BEHAVIOR_SET_GPU_MODE_MASK, mode);
 
 	status = WMI_gaming_execute_u64(ACER_WMID_SET_GAMING_FAN_BEHAVIOR_METHODID, input,
